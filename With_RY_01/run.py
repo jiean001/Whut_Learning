@@ -3,13 +3,13 @@ try:
     from .utils.tensorboard_util import TB_Visualizer
     from .controller.run_classifier import Run_Classifier
     from .controller.run_discriminator import Run_Discriminator
-    from controller.run_gan_ssl_proto_mlp import Run_GAN_Protypical_MLP
+    from controller.run_whole_model import Run_Model
 except:
     from options.base_options import BaseOptions
     from utils.tensorboard_util import TB_Visualizer
     from controller.run_classifier import Run_Classifier
     from controller.run_discriminator import Run_Discriminator
-    from controller.run_gan_ssl_proto_mlp import Run_GAN_Protypical_MLP
+    from controller.run_whole_model import Run_Model
 
 
 options = BaseOptions()
@@ -23,10 +23,12 @@ tb_v = TB_Visualizer(log_dir=global_options['log_dir'], comment=global_options['
 # run_cls.train()
 
 # run_dis = Run_Discriminator(discriminator_options, data_options, global_options, tb_v)
-# # run_dis.add_graph()
+# run_dis.test_flatten()
+# run_dis.add_graph()
 # run_dis.randomly_test()
 # tb_v.close()
 
-model = Run_GAN_Protypical_MLP(classifier_options, discriminator_options, data_options, global_options, tb_v)
-model.tain()
+model = Run_Model(classifier_options, discriminator_options, data_options, global_options, tb_v)
+model.print_model()
+model.train()
 

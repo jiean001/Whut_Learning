@@ -35,6 +35,7 @@ class Prototypical_Net(nn.Module):
         self.shot = shot
         self.unlabeled = unlabeled
         self.query = query
+
     def cal_proto_and_zu(self, z, b, z_dim, n_xu_or_xq, way):
         proto = z[:b*way*self.shot].view(b, way, self.shot, z_dim).mean(2)
         zu_or_zq = z[b*way*self.shot:].view(b, n_xu_or_xq, z_dim)
@@ -74,6 +75,7 @@ class Prototypical_Net(nn.Module):
         xs = xs.view(self.batch_size * way * self.shot, *xs.size()[2:])
         xu_or_xq = xu_or_xq.view(self.batch_size * n_xu_or_xq, *xu_or_xq.size()[2:])
         input_batch = torch.cat([xs, xu_or_xq], 0)
+        # the size of z is:[batch*way*shot, z_dim]
         z = self.encoder.forward(input_batch.float())
         z_dim = z.size(-1)
 
@@ -85,7 +87,7 @@ class Prototypical_Net(nn.Module):
         # the shape of dists is:    [Batch, Way*Query, Way(probability)]
         log_p_dists = F.log_softmax(-dists, dim=2)
         # the shape of y_hat is:    [Batch, Way*Query]
-        _, y_hat = log_p_dists.max(2)
+        prob, y_hat = log_p_dists.max(2)
 
         if yq is not None:
             assert self.batch_size == yq.size(0)
@@ -100,7 +102,7 @@ class Prototypical_Net(nn.Module):
                 'loss': loss_val.item(),
                 'acc': acc_val.item()
             }
-        return y_hat, log_p_dists
+        return prob, y_hat, log_p_dists
 
     def forward(self, sample, run_type=1):
         # xs: (B, way*shot, C, W, H)

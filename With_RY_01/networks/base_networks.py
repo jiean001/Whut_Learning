@@ -97,6 +97,21 @@ def conv_bn_relu_maxpool_block(in_channels, out_channels, kernel_size=3, stride=
     )
 
 
+def conv_bn_relu_block(in_channels, out_channels, kernel_size=3, stride=1, padding=1):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding),
+        nn.BatchNorm2d(out_channels),
+        nn.ReLU()
+    )
+
+
+def linear_sigmoid(in_dim):
+    return nn.Sequential(
+        nn.Linear(in_dim, 1),
+        nn.Sigmoid()
+    )
+
+
 def conv_bn_lrelu_block():
     pass
 

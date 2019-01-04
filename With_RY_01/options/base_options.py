@@ -28,6 +28,8 @@ class BaseOptions():
 
     def initialize(self):
         # -------------- global options begin -------------
+        self.parser.add_argument('--global.model_name', type=str, default=default_model_name, metavar='MODELNAME',
+                                 help="data loader name (default: {:s})".format(default_dataloader_name))
         self.parser.add_argument('--global.use_tensorboardX', action='store_true', default=default_use_tensorboardX,
                                  help='use tensorboardX to visiable')
         self.parser.add_argument('--global.tfX_comment', type=str, default=default_tfX_comment,
@@ -122,7 +124,7 @@ class BaseOptions():
         # -------------- discriminator options begin   ---------------------
         self.parser.add_argument('--discriminator.model_name', type=str, default=default_discriminator_name, metavar='DISNAME',
                                  help="discriminator name (default: {:s})".format(default_discriminator_name))
-        self.parser.add_argument('--discriminator.input_dim', type=int, default=default_input_dim,
+        self.parser.add_argument('--discriminator.input_dim', type=str, default=default_input_dim,
                                  metavar='DISIDIM',
                                  help="the input dimension of the discriminator (default: {:s})".format(str(default_input_dim)))
         self.parser.add_argument('--discriminator.num_classes', type=int, default=default_num_classes,
@@ -218,4 +220,7 @@ class BaseOptions():
         elif 'nn.ReLU' == self.discriminator_opt['activation']:
             self.discriminator_opt['activation'] = nn.ReLU
         self.discriminator_opt['way'] = self.data_opt['way']
+        self.discriminator_opt['shot'] = self.data_opt['shot']
         # -- deal the details of discriminator settings begin -- #
+
+

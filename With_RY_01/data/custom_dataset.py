@@ -16,6 +16,7 @@ import torch.utils.data as data
 import numpy as np
 import os
 import pickle as pkl
+import random
 
 
 class Custom_Dataset(data.Dataset):
@@ -31,7 +32,7 @@ class Custom_Dataset(data.Dataset):
         self._num_query = num_query
         self._aug_90 = aug_90
         self._seed = seed
-        self._rnd = np.random.RandomState(seed)
+        #self._rnd = np.random.RandomState(seed)
 
         self.read_dataset()
 
@@ -62,7 +63,7 @@ class Custom_Dataset(data.Dataset):
         self._label_idx = np.array(self.label_split(), dtype=np.int64)
 
     def label_split(self):
-        rnd = np.random.RandomState(self._seed)
+        #rnd = np.random.RandomState(self._seed)
         num_class = self._num_class
         num_image = self._labels.shape[0]
         image_ids = np.arange(num_image)
@@ -73,7 +74,8 @@ class Custom_Dataset(data.Dataset):
         for class_idx in range(num_class):
             class_images = image_ids[self._labels == class_idx]
             self._label_dict[class_idx] = class_images
-            rnd.shuffle(class_images)
+            #rnd.shuffle(class_images)
+            random.shuffle(class_images)
             label_split.extend(class_images[:int(len(class_images) * self._label_ratio)])
         return sorted(label_split)
 
@@ -93,7 +95,8 @@ class Custom_Dataset(data.Dataset):
     def __getitem__(self, index):
         num_class = self._num_class
         class_ids = np.arange(num_class)
-        self._rnd.shuffle(class_ids)
+        random.shuffle(class_ids)
+        # self._rnd.shuffle(class_ids)
 
         support_image_ids = []
         support_labels = []
@@ -115,8 +118,10 @@ class Custom_Dataset(data.Dataset):
             unlabel_ids = list(
                 filter(lambda _id: _id in self._unlabel_idx_set, class_image_ids))
 
-            self._rnd.shuffle(label_ids)
-            self._rnd.shuffle(unlabel_ids)
+            # self._rnd.shuffle(label_ids)
+            # self._rnd.shuffle(unlabel_ids)
+            random.shuffle(label_ids)
+            random.shuffle(unlabel_ids)
 
             support_image_ids.extend(label_ids[:self._num_shot])
             support_labels.extend([way_idx] * self._num_shot)

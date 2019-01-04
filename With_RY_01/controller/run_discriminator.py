@@ -18,12 +18,22 @@ class Run_Discriminator():
         self.data_options = data_options
         self.discriminator = get_discriminator(self.discriminator_options['model_name'], self.discriminator_options)
         self.global_options = global_options
-        if global_options['cuda']:
-            self.discriminator.cuda(device=global_options['gpu_ids'][0])
+        if self.global_options['cuda']:
+            self.discriminator.cuda(device=self.global_options['gpu_ids'][0])
         self.tb_v = tb_v
 
     def print_network(self):
         print(self.discriminator)
+
+    def test_flatten(self):
+        x, y = self.randomly_generate()
+        fm = self.discriminator.cal_fm(x[0])
+        flatten = self.discriminator.cal_flatten(fm)
+        haha = flatten.view(60, 64, 7, 7)
+        print(fm == haha)
+        a = 1
+
+
 
     def add_graph(self):
         x, y = self.randomly_generate()

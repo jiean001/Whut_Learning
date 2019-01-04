@@ -18,6 +18,7 @@ except:
     from custom_dataset import Custom_Dataset
 import torch
 import os
+import numpy as np
 
 
 class Customed_DataLoader(BaseDataLoader):
@@ -34,7 +35,7 @@ class Customed_DataLoader(BaseDataLoader):
         data_loader = torch.utils.data.DataLoader(
             dataset,
             batch_size=batch_size,
-            shuffle=False,
+            shuffle=True,
             num_workers=int(nThreads))
         self.dataset = dataset
         self._data = Customed_Data(data_loader, episodes)
