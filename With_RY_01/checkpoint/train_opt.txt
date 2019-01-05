@@ -1,0 +1,57 @@
+------------ Options -------------
+classifier.hid_dim: 64
+classifier.lr: 0.001
+classifier.lrG: 0.5
+classifier.lrS: 20
+classifier.model_name: prototype_classifier
+classifier.optim: Adam
+classifier.x_dim: 1,28,28
+classifier.z_dim: 64
+data.aug_90: True
+data.batch_size: 32
+data.dataloader_name: omniglot_dataloader
+data.dataset_name: omniglot
+data.dataset_root: /home/share/dataset/FSL/
+data.label_ratio: 0.5
+data.nThreads: 3
+data.query: 5
+data.seed: 0
+data.sequential: False
+data.shot: 1
+data.split: train
+data.test_episodes: 100
+data.test_query: 5
+data.test_shot: 1
+data.test_split: test
+data.test_way: 5
+data.train_episodes: 100
+data.trainval: False
+data.unlabeled: 5
+data.way: 5
+discriminator.activation: nn.ReLU
+discriminator.activation_parameter: 0.0
+discriminator.input_dim: 1,28,28
+discriminator.is_wn: True
+discriminator.lr: 0.001
+discriminator.lrG: 0.5
+discriminator.lrS: 20
+discriminator.model_name: related_discriminator
+discriminator.noise_hidden_std: 0.5
+discriminator.noise_input_std: 0.3
+discriminator.noise_mean: 0.0
+discriminator.num_classes: 5
+discriminator.optim: Adam
+discriminator.out_dim_list: 64, 64, 64, 64, 64, 64
+discriminator.wn_dim: 1
+global.checkpoint_dir: ./checkpoint
+global.cuda: True
+global.epoches: 10000
+global.gpu_ids: 0,1
+global.is_retrain: False
+global.is_testing: False
+global.is_training: True
+global.log_dir: log
+global.model_name: protypical_related_network
+global.tfX_comment: the tensorboardX commit
+global.use_tensorboardX: True
+-------------- End ----------------

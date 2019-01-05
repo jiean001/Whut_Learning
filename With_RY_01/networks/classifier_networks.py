@@ -87,7 +87,8 @@ class Prototypical_Net(nn.Module):
         # the shape of dists is:    [Batch, Way*Query, Way(probability)]
         log_p_dists = F.log_softmax(-dists, dim=2)
         # the shape of y_hat is:    [Batch, Way*Query]
-        prob, y_hat = log_p_dists.max(2)
+        # prob, y_hat = log_p_dists.max(2)
+        probu, y_hat = log_p_dists.max(2)
 
         if yq is not None:
             assert self.batch_size == yq.size(0)
@@ -102,7 +103,8 @@ class Prototypical_Net(nn.Module):
                 'loss': loss_val.item(),
                 'acc': acc_val.item()
             }
-        return prob, y_hat, log_p_dists
+        return probu, y_hat, log_p_dists
+        # prob
 
     def forward(self, sample, run_type=1):
         # xs: (B, way*shot, C, W, H)
@@ -122,7 +124,8 @@ class Prototypical_Net(nn.Module):
             raise ValueError("Unknown type {:s}".format(type))
 
     def forward_test(self, sample, run_type=1):
-        self.encoder.eval()
+        # todo add the eval
+        # self.encoder.eval()
         # xs: (B, way*shot, C, W, H)
         xs = Variable(sample['xs'])  # support labeled
 

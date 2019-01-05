@@ -77,18 +77,15 @@ class Run_Model():
         # self.tb_v.add_graph(self.model.discriminator.get_graph(), (x, y))
 
     def train(self):
-        haha = 0
-
         for epoch in tqdm(range(self.global_options['epoches'])):
             for i, sample in tqdm(enumerate(self.meta_train_dataset.load_data())):
                 self.model.train(sample=sample)
                 loss = self.model.get_current_errors()
                 self.tb_v.add_loss(errors=loss, scalar_x=epoch*self.data_options['train_episodes']+i)
 
-            for j, test_sample in tqdm(enumerate(self.meta_val_or_test_dataset.load_data())):
+            for j, test_sample in tqdm(enumerate(self.meta_train_dataset.load_data())):
                 evalution = self.model.test(test_sample)
                 self.tb_v.add_loss(errors=evalution, scalar_x=epoch*self.data_options['test_episodes']+j)
-                haha += 1
                 #print('ecpoch:%d' %(epoch), evalution['acc'])
             self.model.update_lr_scheduler()
 

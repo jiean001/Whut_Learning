@@ -83,10 +83,10 @@ class Related_Network(nn.Module):
         self.f_shape = f_shape
 
     # the input is the labeled support set
-    def calculate_prototypical(self, xs, requires_grad=True):
+    def calculate_prototypical(self, xs):
         # the size of xs is: (B, way*shot, C, W, H)
         self.batch_size = xs.size(0)
-        xs = Variable(xs, requires_grad).float()
+        xs = Variable(xs).float()
         xs = xs.view(self.batch_size * self.way * self.shot, *xs.size()[2:])
         # the size of z_xs is: (B*way*shot, z_dim]
         z_xs = self.f.forward(xs)
@@ -142,29 +142,40 @@ class Related_Network(nn.Module):
     def get_f_output(self, x):
         return self.f.forward(x)
 
-    # the input is:
-    # the unlabeled set and its corresponding predicted label
-    # or
-    # the query set and its corresponding label
-    def forward(self, x, y, requires_grad=True):
-        if requires_grad:
-            x = Variable(x).float()
+    def forward(self, x, y, input_type='query'):
+        if input_type == 'query':
             y = Variable(y)
         else:
-            self.f.eval()
-            self.g.eval()
-            x = Variable(x, requires_grad=False).float()
-            y = Variable(y, requires_grad=False)
+            pass
+            # y = y.detach()
+        x = Variable(x).float()
         g_input = self.get_g_input(x, y)
         return self.g.forward(g_input)
 
-    def only_cal_probablity_forward(self, x, y):
-        self.f.eval()
-        self.g.eval()
-        x = Variable(x, requires_grad=False).float()
-        y = Variable(y, requires_grad=False)
+    def evaluate_forward(self, x, y):
+        x = Variable(x).float()
+        y = Variable(y)
         g_input = self.get_g_input(x, y)
         return self.g.forward(g_input)
+
+    # # the input is:
+    # # the unlabeled set and its corresponding predicted label
+    # # or
+    # # the query set and its corresponding label
+    def forward_bak(self, x, y):
+        # if requires_grad:
+        x = Variable(x).float()
+        y = Variable(y)
+        # else:
+        #     self.f.eval()
+        #     self.g.eval()
+        #     x = Variable(x, requires_grad=False).float()
+        #     y = Variable(y, requires_grad=False)
+        g_input = self.get_g_input(x, y)
+        return self.g.forward(g_input)
+    #
+    #
+
 
 
 @register_discriminator('related_discriminator')

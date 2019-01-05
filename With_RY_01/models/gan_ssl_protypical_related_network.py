@@ -108,11 +108,93 @@ class GAN_Protypical_Related_Network():
         print(self.discriminator)
 
     def train(self, sample):
+        # todo
+        # self.classifier.eval()
+        # self.discriminator.f.train(mode=True)
+        # self.discriminator.g.train(mode=True)
+
         # support unlabeled data --> labeled data
         # fake data
         xu = sample['xu']
+
+        # the size of probu is (B, shot*unlabeled)
         # the size of yu is (B, shot*unlabeled)
         # the size of yu_logits is (B, shot*unlabeled, way)
+        probu, yu, yu_logits = self.classifier.forward(sample, run_type=0)
+
+        # true data
+        xq = sample['xq']
+        yq = sample['yq']
+
+        # labeled data
+        xs = sample['xs']
+
+        if self.global_options['cuda']:
+            xu = xu.cuda()
+            yu = yu.cuda()
+            xq = xq.cuda()
+            yq = yq.cuda()
+            xs = xs.cuda()
+
+        # calculate the classifier loss
+        # the classifier's loss defined as:
+        # for i in k, mean bellow formulation
+        # log(D(Yi, X))*log(C(Yi|X))
+        # because of 0 < D(Yi, X) < 1, log(D(Yi, X)) < 0
+        # in order to get the effective feedback value
+        # we finally use bellow loss:
+        # (2*D(Yi, X) - 1) * log(C(Yi|X))
+        # where as
+        # X: image
+        # Yi: corresponding label
+        # D: discriminator, the output is the probability value
+        # C: classifier, the output is probability distribution
+        # C(Yi|X): the specific probability
+        # more details, see "IRGAN"
+        # the size of discriminator's output is: (B*N, 1)
+        # the size of yu_logits is (B, N, way)
+        # calculate the prototypical
+        self.discriminator.calculate_prototypical(xs)
+        # calculate the loss probability
+        loss_prob = probu.view(probu.size(0)*probu.size(1), 1)  # (B*N, 1)
+        # calculate the back reward
+        # loss_weight = torch.log(self.discriminator(xu, yu)) # (B*N, 1)
+        loss_weight = 2 * self.discriminator(xu, yu, input_type='unlabeled') - 1  # (B*N, 1)
+        self.loss_C = -(loss_weight * loss_prob).mean()
+        self.classifier_optimizor.zero_grad()
+        self.loss_C.backward()
+        self.classifier_optimizor.step()
+
+
+        # to D
+        # calculate the prototypes
+        self.discriminator.calculate_prototypical(xs)
+
+        # calculate the D loss, and update its parameters
+        self.discriminator_optimizor.zero_grad()
+        self.real_loss = self.adversarial_loss(self.discriminator(xq, yq, input_type='query'), self.valid)
+        self.fake_loss = self.adversarial_loss(self.discriminator(xu, yu.detach(), input_type='unlabeled'), self.fake)
+
+        self.d_loss = (self.real_loss + self.fake_loss) / 2
+        self.d_loss.backward()
+        self.discriminator_optimizor.step()
+
+        # the traditional G loss
+        # fake_dis = self.discriminator(xu, yu, 'unlabeled')
+        # self.g_loss = self.adversarial_loss(fake_dis, self.valid)
+        #
+        # the prototypical network's loss
+        # self.loss_C = self.classifier.forward(sample)[1]
+        # self.loss_C.backward()
+        # self.classifier_optimizor.step()
+
+    def test(self, sample):
+        # todo
+        # self.classifier.eval()
+        # self.discriminator.f.eval()
+        # self.discriminator.g.eval()
+
+        xu = sample['xu']
         probu, yu, yu_logits = self.classifier.forward(sample, run_type=0)
         # true data
         xq = sample['xq']
@@ -129,76 +211,13 @@ class GAN_Protypical_Related_Network():
 
         # set the proto
         self.discriminator.calculate_prototypical(xs)
-
-        # calculate the D loss, and update its parameters
-        self.discriminator_optimizor.zero_grad()
-        self.real_loss = self.adversarial_loss(self.discriminator(xq, yq), self.valid)
-        self.fake_loss = self.adversarial_loss(self.discriminator(xu, yu), self.fake)
-
-        self.d_loss = (self.real_loss + self.fake_loss) / 2
-        self.d_loss.backward()
-        self.discriminator_optimizor.step()
-
-        # the classifier's loss defined as:
-        # for i in k, mean bellow formulation
-        # log(D(Yi, X))*log(C(Yi|X))
-        # because of 0 < D(Yi, X) < 1, log(D(Yi, X)) < 1
-        # in order to get the effective feedback value
-        # we finally use bellow loss:
-        # (2*D(Yi, X) - 1) * log(C(Yi|X))
-        # where as
-        # X: image
-        # Yi: corresponding label
-        # D: discriminator, the output is the probability value
-        # C: classifier, the output is probability distribution
-        # C(Yi|X): the specific probability
-        # more details, see "IRGAN"
-        # the size of discriminator's output is: (B*N, 1)
-        # the size of yu_logits is (B, N, way)
-
-        self.discriminator.calculate_prototypical(xs, requires_grad=False)
-        loss_prob = probu.view(1, probu.size(0)*probu.size(1))
-        loss_weight = 2*self.discriminator(xu, yu, requires_grad=False) - 1
-        # self.loss_C = -torch.mm(loss_prob, loss_weight)
-        # calculate the traditional G loss
-        self.classifier_optimizor.zero_grad()
-        # fake_dis = self.discriminator(xu, yu)
-        # self.g_loss = self.adversarial_loss(fake_dis, self.valid)
-        # self.g_loss.backward(retain_graph=True)
-        # self.loss_C.backward()
-        # self.g_loss.backward(retain_variables=True)
-        # self.classifier_optimizor.step()
-
-        self.loss_C = self.classifier.forward(sample)[1]
-        self.loss_C.backward()
-        self.classifier_optimizor.step()
-
-    def test(self, sample):
-        acc = self.classifier.forward_test(sample, run_type=1)[2]
-
-        xu = sample['xu']
-        _, yu, yu_logits = self.classifier.forward(sample, run_type=0)
-        # true data
-        xq = sample['xq']
-        yq = sample['yq']
-        # labeled data
-        xs = sample['xs']
-
-        if self.global_options['cuda']:
-            xu = xu.cuda()
-            yu = yu.cuda()
-            xq = xq.cuda()
-            yq = yq.cuda()
-            xs = xs.cuda()
-
-        # set the proto
-        self.discriminator.calculate_prototypical(xs, requires_grad=False)
         # calculate the loss
-        real_loss = self.discriminator(xq, yq, requires_grad=False).mean()
-        fake_loss = self.discriminator(xu, yu, requires_grad=False).mean()
+        real_loss = self.adversarial_loss(self.discriminator.evaluate_forward(xq, yq), self.valid)
+        fake_loss = self.adversarial_loss(self.discriminator.evaluate_forward(xu, yu.detach()), self.fake)
 
+        acc = self.classifier.forward_test(sample, run_type=1)[2]
         # return self.classifier.forward_test(sample, run_type=1)[2]
-        return {"test_real_loss": real_loss.data.item(), "test_fake_loss": fake_loss.data.item(), **acc}
+        return {"test_real_loss": real_loss.data.item(), "test_fake_loss": fake_loss.data.item(), ** acc}
 
     def get_current_errors(self):
         return OrderedDict([#('loss_gan_classifier', self.g_loss.data.item()),

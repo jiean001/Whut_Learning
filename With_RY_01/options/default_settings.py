@@ -13,7 +13,7 @@ import torch.nn as nn
 default_dataloader_name = 'omniglot_dataloader'
 default_dataset_root = r'/home/share/dataset/FSL/'
 default_dataset_name = 'omniglot'
-default_batch_size = 64
+default_batch_size = 32
 default_seed = 0
 default_nThreads = 3
 # train
@@ -31,7 +31,7 @@ default_test_split = 'test'
 default_test_way = 5
 default_test_shot = 1
 default_test_query = 5
-default_test_episodes = 10
+default_test_episodes = 100
 
 # classifier settings
 default_classifier_name = 'prototype_classifier'
