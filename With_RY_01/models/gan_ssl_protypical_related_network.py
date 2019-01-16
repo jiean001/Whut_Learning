@@ -136,6 +136,18 @@ class GAN_Protypical_Related_Network():
             yq = yq.cuda()
             xs = xs.cuda()
 
+        # optimize D
+        # calculate the prototypes
+        self.discriminator.calculate_prototypical(xs)
+
+        # calculate the D loss, and update its parameters
+        self.discriminator_optimizor.zero_grad()
+        self.real_loss = self.adversarial_loss(self.discriminator(xq, yq, input_type='query'), self.valid)
+        self.fake_loss = self.adversarial_loss(self.discriminator(xu, yu.detach(), input_type='unlabeled'), self.fake)
+        self.d_loss = (self.real_loss + self.fake_loss) / 2
+        self.d_loss.backward()
+        self.discriminator_optimizor.step()
+
         # calculate the classifier loss
         # the classifier's loss defined as:
         # for i in k, mean bellow formulation
@@ -154,48 +166,37 @@ class GAN_Protypical_Related_Network():
         # the size of discriminator's output is: (B*N, 1)
         # the size of yu_logits is (B, N, way)
         # calculate the prototypical
-        self.discriminator.calculate_prototypical(xs)
-        # calculate the loss probability
-        loss_prob = probu.view(probu.size(0)*probu.size(1), 1)  # (B*N, 1)
-        # calculate the back reward
-        # loss_weight = torch.log(self.discriminator(xu, yu)) # (B*N, 1)
-        loss_weight = 2 * self.discriminator(xu, yu, input_type='unlabeled') - 1  # (B*N, 1)
-        self.loss_C = -(loss_weight * loss_prob).mean()
-        self.classifier_optimizor.zero_grad()
-        self.loss_C.backward()
-        self.classifier_optimizor.step()
-
-
-        # to D
-        # calculate the prototypes
-        self.discriminator.calculate_prototypical(xs)
-
-        # calculate the D loss, and update its parameters
-        self.discriminator_optimizor.zero_grad()
-        self.real_loss = self.adversarial_loss(self.discriminator(xq, yq, input_type='query'), self.valid)
-        self.fake_loss = self.adversarial_loss(self.discriminator(xu, yu.detach(), input_type='unlabeled'), self.fake)
-
-        self.d_loss = (self.real_loss + self.fake_loss) / 2
-        self.d_loss.backward()
-        self.discriminator_optimizor.step()
+        k = 0
+        for i in range(k):
+            self.discriminator.calculate_prototypical(xs)
+            # calculate the loss probability
+            loss_prob = probu.view(probu.size(0)*probu.size(1), 1)  # (B*N, 1)
+            # calculate the back reward
+            # directly calculate D(Yi, X), the acc-->0.7
+            # loss_weight = self.discriminator(xu, yu, input_type='unlabeled')  # (B*N, 1)
+            # directly calculate log(D(Yi, X)), the acc-->0.38
+            # loss_weight = -torch.log(self.discriminator(xu, yu, input_type='unlabeled'))  # (B*N, 1)
+            # calculate (1 - D(Yi, X)), the acc-->0.38
+            loss_weight = 1 - 2 * self.discriminator(xu, yu, input_type='unlabeled')  # (B*N, 1)
+            self.loss_C = (loss_weight * loss_prob).mean()
+            self.classifier_optimizor.zero_grad()
+            self.loss_C.backward(retain_graph=True)
+            self.classifier_optimizor.step()
 
         # the traditional G loss
         # fake_dis = self.discriminator(xu, yu, 'unlabeled')
         # self.g_loss = self.adversarial_loss(fake_dis, self.valid)
         #
         # the prototypical network's loss
+        # self.classifier_optimizor.zero_grad()
         # self.loss_C = self.classifier.forward(sample)[1]
         # self.loss_C.backward()
         # self.classifier_optimizor.step()
 
-    def test(self, sample):
-        # todo
-        # self.classifier.eval()
-        # self.discriminator.f.eval()
-        # self.discriminator.g.eval()
-
+    def get_data(self, sample):
+        # support unlabeled data --> labeled data
+        # fake data
         xu = sample['xu']
-        probu, yu, yu_logits = self.classifier.forward(sample, run_type=0)
         # true data
         xq = sample['xq']
         yq = sample['yq']
@@ -204,20 +205,79 @@ class GAN_Protypical_Related_Network():
 
         if self.global_options['cuda']:
             xu = xu.cuda()
-            yu = yu.cuda()
             xq = xq.cuda()
             yq = yq.cuda()
             xs = xs.cuda()
 
-        # set the proto
-        self.discriminator.calculate_prototypical(xs)
-        # calculate the loss
-        real_loss = self.adversarial_loss(self.discriminator.evaluate_forward(xq, yq), self.valid)
-        fake_loss = self.adversarial_loss(self.discriminator.evaluate_forward(xu, yu.detach()), self.fake)
+        return xu, xq, yq, xs
 
-        acc = self.classifier.forward_test(sample, run_type=1)[2]
-        # return self.classifier.forward_test(sample, run_type=1)[2]
-        return {"test_real_loss": real_loss.data.item(), "test_fake_loss": fake_loss.data.item(), ** acc}
+    def train_D(self, sample):
+        xu, xq, yq, xs = self.get_data(sample)
+        yu = self.classifier.forward(sample, run_type=0)[1]
+        if self.global_options['cuda']:
+            yu = yu.cuda()
+
+        self.discriminator.calculate_prototypical(xs)
+        # calculate the D loss, and update its parameters
+        self.discriminator_optimizor.zero_grad()
+        self.real_loss = self.adversarial_loss(self.discriminator(xq, yq, input_type='query'), self.valid)
+        self.fake_loss = self.adversarial_loss(self.discriminator(xu, yu.detach(), input_type='unlabeled'), self.fake)
+        self.d_loss = (self.real_loss + self.fake_loss) / 2
+        self.d_loss.backward()
+        self.discriminator_optimizor.step()
+
+    def train_C(self, sample):
+        xu, xq, yq, xs = self.get_data(sample)
+        probu, yu = self.classifier.forward(sample, run_type=0)[:-1]
+        if self.global_options['cuda']:
+            yu = yu.cuda()
+
+        self.discriminator.calculate_prototypical(xs)
+        # calculate the loss probability
+        loss_prob = probu.view(probu.size(0) * probu.size(1), 1)  # (B*N, 1)
+        # calculate the back reward
+        # directly calculate D(Yi, X), the acc-->0.7
+        # loss_weight = self.discriminator(xu, yu, input_type='unlabeled')  # (B*N, 1)
+        # directly calculate log(D(Yi, X)), the acc-->0.38
+        # loss_weight = -torch.log(self.discriminator(xu, yu, input_type='unlabeled'))  # (B*N, 1)
+        # calculate (1 - D(Yi, X)), the acc-->0.38
+        loss_weight = (1 - 2 * self.discriminator(xu, yu, input_type='unlabeled')).detach()  # (B*N, 1)
+        self.loss_C = (loss_weight * loss_prob).mean()
+        self.classifier_optimizor.zero_grad()
+        self.loss_C.backward()
+        self.classifier_optimizor.step()
+
+    def test(self, sample):
+        return self.classifier.forward_test(sample, run_type=1)[2]
+        # todo
+        # self.classifier.eval()
+        # self.discriminator.f.eval()
+        # self.discriminator.g.eval()
+
+        # xu = sample['xu']
+        # probu, yu, yu_logits = self.classifier.forward(sample, run_type=0)
+        # # true data
+        # xq = sample['xq']
+        # yq = sample['yq']
+        # # labeled data
+        # xs = sample['xs']
+        #
+        # if self.global_options['cuda']:
+        #     xu = xu.cuda()
+        #     yu = yu.cuda()
+        #     xq = xq.cuda()
+        #     yq = yq.cuda()
+        #     xs = xs.cuda()
+        #
+        # # set the proto
+        # self.discriminator.calculate_prototypical(xs)
+        # # calculate the loss
+        # real_loss = self.adversarial_loss(self.discriminator.evaluate_forward(xq, yq), self.valid)
+        # fake_loss = self.adversarial_loss(self.discriminator.evaluate_forward(xu, yu.detach()), self.fake)
+        #
+        # acc = self.classifier.forward_test(sample, run_type=1)[2]
+        # # return self.classifier.forward_test(sample, run_type=1)[2]
+        # return {"test_real_loss": real_loss.data.item(), "test_fake_loss": fake_loss.data.item(), ** acc}
 
     def get_current_errors(self):
         return OrderedDict([#('loss_gan_classifier', self.g_loss.data.item()),
@@ -227,4 +287,15 @@ class GAN_Protypical_Related_Network():
                             ('loss_gan_dis', self.d_loss.data.item())
         ])
 
+    def get_current_errors_C(self):
+        return OrderedDict([#('loss_gan_classifier', self.g_loss.data.item()),
+                            ('loss_classifier', self.loss_C.data.item())
+        ])
+
+    def get_current_errors_D(self):
+        return OrderedDict([#('loss_gan_classifier', self.g_loss.data.item()),,
+                            ('loss_gan_fake', self.fake_loss.data.item()),
+                            ('loss_gan_real', self.real_loss.data.item()),
+                            ('loss_gan_dis', self.d_loss.data.item())
+        ])
 

@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import functools
 
 try:
     from ..options.default_settings import Tensor
@@ -28,8 +29,9 @@ class Gaussian_Noise_Layer(nn.Module):
         noise = Tensor(np.random.normal(self.mean, self.std, size=input.size()))
         return input+noise
 
-def mlp_lrelu_wn(input_dim, num_classes, output_dim, activation=nn.LeakyReLU, activation_parameter=None,
-                          is_wn=False, wn_dim=1):
+
+def mlp_lrelu_wn(input_dim, output_dim, activation=nn.LeakyReLU, activation_parameter=None,
+                          is_wn=False):
     if is_wn:
         out = nn.Sequential(
             nn.utils.weight_norm(nn.Linear(input_dim, output_dim))
@@ -96,6 +98,14 @@ def conv_bn_relu_maxpool_block(in_channels, out_channels, kernel_size=3, stride=
         nn.MaxPool2d(2)
     )
 
+def conv_bn_lrelu_maxpool_block(in_channels, out_channels, leaky=0.2, kernel_size=3, stride=1, padding=1):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding),
+        nn.BatchNorm2d(out_channels),
+        nn.LeakyReLU(leaky, True),
+        nn.MaxPool2d(2)
+    )
+
 
 def conv_bn_relu_block(in_channels, out_channels, kernel_size=3, stride=1, padding=1):
     return nn.Sequential(
@@ -103,6 +113,34 @@ def conv_bn_relu_block(in_channels, out_channels, kernel_size=3, stride=1, paddi
         nn.BatchNorm2d(out_channels),
         nn.ReLU()
     )
+
+
+def conv_norm_relu_block(norm_layer, input_nc, ngf, kernel_size, padding, stride=1, relu='relu'):
+    model = [nn.Conv2d(input_nc, ngf, kernel_size=kernel_size, padding=padding, stride=stride)]
+    if norm_layer:
+        model += [norm_layer(ngf)]
+
+    if relu == 'relu':
+        model += [nn.ReLU(True)]
+    elif relu == 'Lrelu':
+        model += [nn.LeakyReLU(0.2, True)]
+    return nn.Sequential(*model)
+
+
+def conv_bn_lrelu_block(in_channels, out_channels, leaky=0.2, kernel_size=3, stride=1, padding=1):
+    return nn.Sequential(
+        nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride, padding=padding),
+        nn.BatchNorm2d(out_channels),
+        nn.LeakyReLU(leaky, True)
+    )
+
+
+def convTranspose_norm_relu_block(norm_layer, input_nc, ngf, kernel_size, padding, stride=1, output_padding=0):
+    model = [nn.ConvTranspose2d(input_nc, ngf,
+                                kernel_size=kernel_size, stride=stride, padding=padding, output_padding=output_padding),
+             norm_layer(int(ngf)),
+             nn.ReLU(True)]
+    return nn.Sequential(*model)
 
 
 def linear_sigmoid(in_dim):
@@ -123,6 +161,19 @@ def gaussian_mlp_lrelu_wn(input_dim, num_classes, output_dim, activation=nn.Leak
                               activation=activation, activation_parameter=activation_parameter, is_wn=is_wn, wn_dim=wn_dim,
                               noise_mean=noise_mean, noise_std=noise_std)
     )
+
+
+def get_norm_layer(norm_type):
+    if norm_type == 'batch':
+        norm_layer = functools.partial(nn.BatchNorm2d, affine=True)
+    elif norm_type == 'instance':
+        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False)
+    elif norm_type == 'layer':
+        norm_layer = functools.partial(nn.LayerNorm, affine=False)
+    else:
+        norm_layer = None
+        print('normalization layer [%s] is not found' %(norm_type))
+    return norm_layer
 
 
 class Base_MLP_Network(nn.Module):
@@ -186,4 +237,38 @@ class Base_MLP_Network(nn.Module):
         for i in range(self.num_layer):
             sample = (out, y_one_hot)
             out = self.mlpnet[i + 1].forward(sample)
+        return out
+
+
+# Define a resnet block
+class ResnetBlock(nn.Module):
+    def __init__(self, dim, padding_type, norm_layer, use_dropout, norm_type='batch'):
+        super(ResnetBlock, self).__init__()
+        self.conv_block = self.build_conv_block(dim, padding_type, norm_layer, use_dropout, norm_type)
+
+    def build_conv_block(self, dim, padding_type, norm_layer, use_dropout, norm_type):
+        conv_block = []
+        p = 0
+        # TODO: support padding types
+        assert (padding_type == 'zero')
+        p = 1
+
+        # TODO: InstanceNorm
+
+        conv_block += conv_norm_relu_block(norm_layer, dim, dim, 3, p)[:]
+        if use_dropout:
+            conv_block += [nn.Dropout(0.5)]
+        else:
+            conv_block += [nn.Dropout(0.0)]
+
+        if norm_type == 'batch' or norm_type == 'instance':
+            conv_block += [nn.Conv2d(dim, dim, kernel_size=3, padding=p),
+                           norm_layer(dim)]
+        else:
+            assert ("norm not defined")
+
+        return nn.Sequential(*conv_block)
+
+    def forward(self, x):
+        out = x + self.conv_block(x)
         return out

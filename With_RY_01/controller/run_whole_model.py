@@ -3,11 +3,15 @@ try:
     from ..data.data_loader import Customed_DataLoader
     from ..models.gan_ssl_protypical_mlp import GAN_Protypical_MLP
     from ..models.gan_ssl_protypical_related_network import GAN_Protypical_Related_Network
+    from ..models.gan_ssl_protypical_related_continuous_network import GAN_Protypical_Related_Continuous_Network
+    from ..models.gan_p_r_c_g_network import GAN_Proto_Related_Conti_G_Network
 except:
     from data.data_factory import get_dataloader
     from data.data_loader import Customed_DataLoader
     from models.gan_ssl_protypical_mlp import GAN_Protypical_MLP
     from models.gan_ssl_protypical_related_network import GAN_Protypical_Related_Network
+    from models.gan_ssl_protypical_related_continuous_network import GAN_Protypical_Related_Continuous_Network
+    from models.gan_p_r_c_g_network import GAN_Proto_Related_Conti_G_Network
 from tqdm import tqdm
 
 
@@ -28,6 +32,16 @@ class Run_Model():
         elif self.global_options['model_name'] == 'protypical_related_network':
             self.model = GAN_Protypical_Related_Network(classifier_options, discriminator_options, global_options,
                                             valid_0_dim, fake_0_dim, tb_v)
+        elif self.global_options['model_name'] == 'protopical_related_continuous_network':
+            self.model = GAN_Protypical_Related_Continuous_Network(
+                classifier_options, discriminator_options, global_options,
+                valid_0_dim, fake_0_dim, tb_v
+            )
+        elif self.global_options['model_name'] == 'p_r_c_g':
+            self.model = GAN_Proto_Related_Conti_G_Network(
+                classifier_options, discriminator_options, global_options,
+                valid_0_dim, fake_0_dim, tb_v
+            )
         else:
             raise ValueError("Unknown model {:s}".format(self.global_options['model_name']))
         self.meta_train_dataset, self.meta_val_or_test_dataset = self.init_dataset()
@@ -39,7 +53,7 @@ class Run_Model():
         data_val_or_test_options['label_ratio'] = 1
         data_val_or_test_options['way'] = self.data_options['test_way']
         data_val_or_test_options['shot'] = self.data_options['test_shot']
-        #data_val_or_test_options['unlabeled'] = 0
+        # data_val_or_test_options['unlabeled'] = 0
         data_val_or_test_options['query'] = self.data_options['test_query']
         data_val_or_test_options['episodes'] = self.data_options['test_episodes']
 
@@ -77,16 +91,19 @@ class Run_Model():
         # self.tb_v.add_graph(self.model.discriminator.get_graph(), (x, y))
 
     def train(self):
-        for epoch in tqdm(range(self.global_options['epoches'])):
-            for i, sample in tqdm(enumerate(self.meta_train_dataset.load_data())):
-                self.model.train(sample=sample)
-                loss = self.model.get_current_errors()
-                self.tb_v.add_loss(errors=loss, scalar_x=epoch*self.data_options['train_episodes']+i)
 
-            for j, test_sample in tqdm(enumerate(self.meta_train_dataset.load_data())):
+        for epoch in tqdm(range(self.global_options['epoches'])):
+            # train
+            for i, sample in tqdm(enumerate(self.meta_train_dataset.load_data())):
+                kkkk = 1
+                self.model.train(sample=sample, more_attention_D=(epoch > 1.1 *self.global_options['epoches']), more_attention_C=(epoch > 1.99*self.global_options['epoches']))
+                loss = self.model.get_current_errors()
+                self.tb_v.add_loss(errors=loss, scalar_x=h_d)
+                h_d += 1
+            # test
+            for j, test_sample in tqdm(enumerate(self.meta_val_or_test_dataset.load_data())):
                 evalution = self.model.test(test_sample)
                 self.tb_v.add_loss(errors=evalution, scalar_x=epoch*self.data_options['test_episodes']+j)
-                #print('ecpoch:%d' %(epoch), evalution['acc'])
             self.model.update_lr_scheduler()
 
     def print_model(self):

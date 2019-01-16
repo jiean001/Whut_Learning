@@ -24,7 +24,7 @@ class BaseOptions():
     def __init__(self):
         self.parser = argparse.ArgumentParser()
         self.initialized = False
-        self.parse()
+        self.parse('nst')
 
     def initialize(self):
         # -------------- global options begin -------------
@@ -48,6 +48,8 @@ class BaseOptions():
         self.parser.add_argument('--global.is_retrain', action='store_true', default=default_is_retrain,
                                  help="is training (default: {:s})".format(str(default_is_retrain)))
         self.parser.add_argument('--global.epoches', '--epochs', type=int, help='number of epochs to train for', default=default_epoches)
+        self.parser.add_argument('--global.start_epoch', '--start_epoch', type=int, help='global.start_epoch',
+                                 default=default_start_epoch)
         # -------------- global options end  --------------
 
         # -------------- data options begin  ------------------------------
@@ -153,6 +155,10 @@ class BaseOptions():
         self.parser.add_argument('--discriminator.noise_input_std', type=str, default=default_noise_input_std,
                                  metavar='DISNSISTD',
                                  help="the std of input layer gaussian noise (default: {:s})".format(str(default_noise_input_std)))
+        self.parser.add_argument('--discriminator.continuous_type', type=str, default=default_continuous_type,
+                                 metavar='DISCT',
+                                 help="the std of input layer gaussian noise (default: {:s})".format(
+                                     str(default_continuous_type)))
         self.parser.add_argument('--discriminator.optim', type=str, default=default_dis_opt, metavar='DISSOPTIM',
                                  help="the classifier optimizer: {:s}".format(default_dis_opt))
         self.parser.add_argument('--discriminator.lr', '--disc_learning_rate', type=float,
@@ -164,17 +170,96 @@ class BaseOptions():
         self.parser.add_argument('--discriminator.lrG', '--dis_lr_scheduler_gamma', type=float,
                                  help='StepLR learning rate scheduler gamma, default={:f}'.format(
                                      default_cls_lrG), default=default_dis_lrG)
-
         # -------------- discriminator options end    ----------------------
+
+        # -------------- NST options start    ----------------------
+        # -----data start----
+        self.parser.add_argument('--nst_data.dataloader_name', type=str, default=default_nst_dataloader_name,
+                                 metavar='NSTDATALOADERNAME',
+                                 help="nst dataset name (default: {:s})".format(default_nst_dataset_dir))
+        self.parser.add_argument('--nst_data.dataset_dir', type=str, default=default_nst_dataset_dir, metavar='NSTDATADIR',
+                                 help="nst dataset name (default: {:s})".format(default_nst_dataset_dir))
+        self.parser.add_argument('--nst_data.dataset_name', type=str, default=default_nst_dataset_name, metavar='NSTDATANAMT',
+                                 help="nst dataset name (default: {:s})".format(default_nst_dataset_name))
+        self.parser.add_argument('--nst_data.dataset_type', type=str, default=default_nst_dataset_type, metavar='NSTDATATYPE',
+                                 help="nst dataset type (default: {:s})".format(default_nst_dataset_type))
+        self.parser.add_argument('--nst_data.is_rgb', action='store_true', default=default_nst_is_rgb,
+                                 help="nst dataset is rgb? (default: {:s})".format(str(default_nst_is_rgb)))
+        self.parser.add_argument('--nst_data.style_character_num', type=int, default=default_nst_style_character_num, metavar='NSTDATASTYNU',
+                                 help="nst dataset style_character_num (default: {:d})".format(default_nst_style_character_num))
+        self.parser.add_argument('--nst_data.one_style_choice_num', type=int, default=default_nst_one_style_choice_num, metavar='NSTDATASCHONU',
+                                 help="nst dataset one_style_choice_num (default: {:d})".format(default_nst_one_style_choice_num))
+        self.parser.add_argument('--nst_data.default_img_loader', type=str, default=default_nst_loader, metavar='NSTLDNAME',
+                                 help="the default loader name (default: {:s})".format(default_nst_loader))
+        self.parser.add_argument('--nst_data.fineSize', type=int, default=default_nst_fineSize, metavar='NSTFINESIZE',
+                                 help="nst fine size (default: {:s})".format(str(default_nst_fineSize)))
+        self.parser.add_argument('--nst_data.is_cuda', action='store_true', default=default_nst_is_cuda,
+                                 help="nst is cuda (default: {:s})".format(str(default_nst_is_cuda)))
+        self.parser.add_argument('--nst_data.batch_size', type=int, default=default_nst_batch_size, metavar='NSTBATCHSIZE',
+                                 help="nst batch size (default: {:d})".format(default_nst_batch_size))
+        self.parser.add_argument('--nst_data.nThreads', type=int, default=default_nst_nThreads, metavar='NSTTHREAD',
+                                 help="nst thread (default: {:d})".format(default_nst_nThreads))
+        self.parser.add_argument('--nst_data.max_dataset_size', type=int, default=default_nst_max_dataset_size, metavar='NSTMAXSIZE',
+                                 help="nst_data max_dataset_size (default: {:d})".format(default_nst_max_dataset_size))
+        # -----data end----
+        # -----global start-----
+
+        # -----global end-------
+        # -----generator start-----
+        self.parser.add_argument('--nst_generator.model_name', type=str, default=default_nst_g_model_name,
+                                 metavar='nst_generator.model_name',
+                                 help="nst_generator.model_name (default: {:s})".format(default_nst_g_model_name))
+        self.parser.add_argument('--nst_generator.input_nc', type=int, default=default_nst_g_input_nc, metavar='NSTGIPUTNC',
+                                 help="nst_generator.input_nc (default: {:s})".format(str(default_nst_g_input_nc)))
+        self.parser.add_argument('--nst_generator.style_num', type=int, default=default_nst_g_style_num, metavar='NSTSTYNUM',
+                                 help="nst_generator.style_num (default: {:s})".format(str(default_nst_g_style_num)))
+        self.parser.add_argument('--nst_generator.output_nc', type=int, default=default_nst_g_output_nc,
+                                 metavar='NSTOUTPUTNC',
+                                 help="nst_generator.output_nc (default: {:d})".format(default_nst_g_output_nc))
+        self.parser.add_argument('--nst_generator.ngf', type=int, default=default_nst_g_ngf, metavar='NSTNGF',
+                                 help="nst_generator.ngf (default: {:d})".format(default_nst_g_ngf))
+        self.parser.add_argument('--nst_generator.norm_layer', type=str, default=default_nst_g_norm_layer, metavar='NSTNORMALLAY',
+                                 help="nst_generator.norm_layer (default: {:s})".format(default_nst_g_norm_layer))
+        self.parser.add_argument('--nst_generator.gpu_ids', type=str, default=default_nst_g_gpu_ids, metavar='NSTPGPUIDS',
+                                 help="nst_generator.gpu_ids (default: {:s})".format(default_nst_g_gpu_ids))
+        self.parser.add_argument('--nst_generator.lr', type=float, default=default_nst_g_lr, metavar='nst_generator.lr',
+                                 help="nst_generator.lr (default: {:f})".format(default_nst_g_lr))
+        self.parser.add_argument('--nst_generator.beta1', type=float, default=default_nst_g_beta1, metavar='nst_generator.beta1',
+                                 help="nst_generator.beta1 (default: {:f})".format(default_nst_g_beta1))
+        # -----generator end-------
+        # -----discriminator start-----
+        # -----discriminator end-------
+        # -------------- NST options end    ----------------------
 
         self.initialized = True
 
-    def parse(self):
+    def parse(self, parse_type):
         if not self.initialized:
             self.initialize()
         opt = self.parser.parse_args()
         args = vars(opt)
 
+        if parse_type == 'few-shot':
+            self.parse_few_shot(args)
+        elif parse_type == 'nst':
+            self.parse_nst(args)
+
+    def parse_nst(self, args):
+        tag_lst = ['nst_data', 'nst_generator', 'global']
+        opt_dict = filter_multi_opt(args, tag_lst=tag_lst)
+        self.data_opt = opt_dict['nst_data']
+        self.generator_options = opt_dict['nst_generator']
+        self.global_opt =  opt_dict['global']
+        self.classifier_opt = None
+        self.discriminator_opt = None
+        self.deal_global(args)
+
+        if isinstance(self.generator_options['gpu_ids'], str):
+            self.generator_options['gpu_ids'] = [int(self.generator_options['gpu_ids'])]
+        print(self.data_opt, self.generator_options)
+
+    def parse_few_shot(self, args):
+        # few-shot learning
         tag_lst = ['global', 'data', 'classifier', 'discriminator']
         opt_dict = filter_multi_opt(args, tag_lst=tag_lst)
 
@@ -182,27 +267,7 @@ class BaseOptions():
         self.data_opt = opt_dict['data']
         self.classifier_opt = opt_dict['classifier']
         self.discriminator_opt = opt_dict['discriminator']
-
-        # -- deal the details of global settings begin -- #
-        # deal single gpu
-        if isinstance(self.global_opt['gpu_ids'], str):
-            self.global_opt['gpu_ids'] = [int(self.global_opt['gpu_ids'])]
-
-        # create checkpoint and log folder
-        self.global_opt['log_dir'] = os.path.join(self.global_opt['checkpoint_dir'], self.global_opt['log_dir'])
-        mkdirs(self.global_opt['log_dir'])
-        # -- deal the details of global settings end -- #
-
-        # print log #
-        if self.global_opt['is_training']:
-            file_name = os.path.join(self.global_opt['checkpoint_dir'], 'train_opt.txt')
-        else:
-            file_name = os.path.join(self.global_opt['checkpoint_dir'], 'test_opt.txt')
-        with open(file_name, 'wt') as opt_file:
-            opt_file.write('------------ Options -------------\n')
-            for k, v in sorted(args.items()):
-                opt_file.write('%s: %s\n' % (str(k), str(v)))
-            opt_file.write('-------------- End ----------------\n')
+        self.deal_global(args)
 
         # -- deal the details of classifier settings begin -- #
         # add cuda to classifier
@@ -223,4 +288,24 @@ class BaseOptions():
         self.discriminator_opt['shot'] = self.data_opt['shot']
         # -- deal the details of discriminator settings begin -- #
 
+    def deal_global(self, args):
+        # -- deal the details of global settings begin -- #
+        # deal single gpu
+        if isinstance(self.global_opt['gpu_ids'], str):
+            self.global_opt['gpu_ids'] = [int(self.global_opt['gpu_ids'])]
 
+        # create checkpoint and log folder
+        self.global_opt['log_dir'] = os.path.join(self.global_opt['checkpoint_dir'], self.global_opt['log_dir'])
+        mkdirs(self.global_opt['log_dir'])
+        # -- deal the details of global settings end -- #
+
+        # print log #
+        if self.global_opt['is_training']:
+            file_name = os.path.join(self.global_opt['checkpoint_dir'], 'train_opt.txt')
+        else:
+            file_name = os.path.join(self.global_opt['checkpoint_dir'], 'test_opt.txt')
+        with open(file_name, 'wt') as opt_file:
+            opt_file.write('------------ Options -------------\n')
+            for k, v in sorted(args.items()):
+                opt_file.write('%s: %s\n' % (str(k), str(v)))
+            opt_file.write('-------------- End ----------------\n')

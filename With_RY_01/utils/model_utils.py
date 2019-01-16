@@ -24,7 +24,7 @@ def load_network(network, network_label, epoch_label, save_dir, config_file=None
     save_path = os.path.join(save_dir, save_filename)
     weights = torch.load(save_path)
     if not config_file:
-        self.load_base_network(network, weights, print_weights, ignore_BN)
+        load_base_network(network, weights, print_weights, ignore_BN)
     else:
         model_dict = network.state_dict()
         # new_weights = {}

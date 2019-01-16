@@ -153,6 +153,7 @@ class Related_Network(nn.Module):
         return self.g.forward(g_input)
 
     def evaluate_forward(self, x, y):
+
         x = Variable(x).float()
         y = Variable(y)
         g_input = self.get_g_input(x, y)
@@ -173,10 +174,6 @@ class Related_Network(nn.Module):
         #     y = Variable(y, requires_grad=False)
         g_input = self.get_g_input(x, y)
         return self.g.forward(g_input)
-    #
-    #
-
-
 
 @register_discriminator('related_discriminator')
 def load_related_discriminator(**kwargs):
@@ -202,3 +199,219 @@ def load_related_discriminator(**kwargs):
     )
 
     return Related_Network(f, g, way, shot, f_shape)
+
+
+class Related_Network_Continuous(nn.Module):
+    # continuous_type = add or cat
+    def __init__(self, f, g, way, shot, f_shape, continuous_type='add'):
+        super(Related_Network_Continuous, self).__init__()
+        self.f = f
+        self.g = g
+        self.way = way
+        self.shot = shot
+        self.f_shape = f_shape
+        self.continuous_type = continuous_type
+
+    # the input is the labeled support set
+    def calculate_prototypical(self, xs):
+        # the size of xs is: (B, way*shot, C, W, H)
+        self.batch_size = xs.size(0)
+        xs = Variable(xs).float()
+        xs = xs.view(self.batch_size * self.way * self.shot, *xs.size()[2:])
+        # the size of z_xs is: (B*way*shot, z_dim]
+        z_xs = self.f.forward(xs)
+        z_dim = z_xs.size(-1)
+        # the size of proto is: (B, way, z_dim])
+        self.proto = z_xs.view(self.batch_size, self.way, self.shot, z_dim).mean(2)
+        self.z_dim = self.proto.size(-1)
+
+    def get_crspd_proto_based_label(self, y_probability):
+        assert self.batch_size == y_probability.size(0)
+        # y_probability is the probability distribution
+        # if the input is query data
+        # we can think the y_probability is the one-hot coding
+        num_query_or_unlabeled = y_probability.size(1)
+
+        # the size of proto is (B, 1, way, Z)
+        proto = self.proto.unsqueeze(1)
+        # expand the size of proto to (B, N, way, Z)
+        proto = proto.expand(self.batch_size, num_query_or_unlabeled, self.way, self.z_dim)
+        # in order to calculate simplifier
+        # resize the size of proto to (B*N, way, Z)
+        proto = proto.contiguous().view((-1, self.way, self.z_dim))
+
+        if self.continuous_type == 'add':
+            y_probability = y_probability.view(self.batch_size * num_query_or_unlabeled, 1, self.way)
+            # the size of crspd_protp is (B*N, 1, Z)
+            crspd_protp = torch.bmm(y_probability, proto)
+        else:
+            y_probability = y_probability.view(self.batch_size * num_query_or_unlabeled, self.way, 1)
+            # the size of crspd_protp is (B*N, way, Z)
+            crspd_protp = proto * y_probability
+        return crspd_protp.view(crspd_protp.size(0), self.f_shape[0]*crspd_protp.size(1), *self.f_shape[1:])
+
+    def get_g_input(self, x, y):
+        assert self.batch_size == x.size(0)
+        x = x.view(self.batch_size * x.size(1), *x.size()[2:])
+        z_x = self.f.forward(x)
+        z_x = z_x.view(z_x.size(0), *self.f_shape[:])
+        z_x_corresponding_proto = self.get_crspd_proto_based_label(y)
+
+
+        assert z_x.size()[2:] == z_x_corresponding_proto.size()[2:]
+        # the size of g_input is: (B*N, 2*f_out_c, f_out_h, f_out_w)
+        return torch.cat([z_x, z_x_corresponding_proto], 1)
+
+    def get_f_output(self, x):
+        return self.f.forward(x)
+
+    def forward(self, x, y, input_type='query'):
+        if input_type == 'query':
+            y = Variable(y)
+        else:
+            pass
+            # y = y.detach()
+        x = Variable(x).float()
+        g_input = self.get_g_input(x, y)
+        return self.g.forward(g_input)
+
+    def evaluate_forward(self, x, y):
+        x = Variable(x).float()
+        y = Variable(y)
+        g_input = self.get_g_input(x, y)
+        return self.g.forward(g_input)
+
+    # # the input is:
+    # # the unlabeled set and its corresponding predicted label
+    # # or
+    # # the query set and its corresponding label
+    def forward_bak(self, x, y):
+        # if requires_grad:
+        x = Variable(x).float()
+        y = Variable(y)
+        # else:
+        #     self.f.eval()
+        #     self.g.eval()
+        #     x = Variable(x, requires_grad=False).float()
+        #     y = Variable(y, requires_grad=False)
+        g_input = self.get_g_input(x, y)
+        return self.g.forward(g_input)
+
+@register_discriminator('related_continuous_discriminator')
+def load_related_continuous_discriminator(**kwargs):
+    input_dim = kwargs['input_dim']        # default is [1, 28, 28]
+    out_dim_list = kwargs['out_dim_list']  # default is:[32, 64, 64, 64, 64, 64]
+    way = kwargs['way']
+    shot = kwargs['shot']
+    f_shape = (out_dim_list[3], input_dim[1] // 2 // 2, input_dim[2] // 2 // 2)
+    continuous_type = kwargs['continuous_type']
+
+    if continuous_type == 'add':
+        g_input_dim = 2*out_dim_list[3]
+    elif continuous_type == 'cat':
+        g_input_dim = (1+way)*out_dim_list[3]
+
+    f = nn.Sequential(
+        conv_bn_relu_maxpool_block(input_dim[0], out_dim_list[0]),         # (32, 14, 14)
+        conv_bn_relu_maxpool_block(out_dim_list[0], out_dim_list[1]),      # (64, 7, 7)
+        conv_bn_relu_block(out_dim_list[1], out_dim_list[2]),              # (64, 7, 7)
+        conv_bn_relu_block(out_dim_list[2], out_dim_list[3]),              # (64, 7, 7)
+        Flatten()
+    )
+
+    g = nn.Sequential(
+        conv_bn_relu_maxpool_block(g_input_dim, out_dim_list[4]),           # (128, 3, 3)
+        conv_bn_relu_maxpool_block(out_dim_list[4], out_dim_list[5]),             # (64, 1, 1)
+        Flatten(),
+        linear_sigmoid(out_dim_list[5])
+    )
+    return Related_Network_Continuous(f, g, way, shot, f_shape, continuous_type=continuous_type)
+
+
+class Related_Network_Continuous_Only_G(nn.Module):
+    # continuous_type = add or cat
+    def __init__(self, g, f_shape, continuous_type='add'):
+        super(Related_Network_Continuous_Only_G, self).__init__()
+        self.g = g
+        self.f_shape = f_shape
+        self.continuous_type = continuous_type
+
+    def get_crspd_proto_based_label(self, y_probability, proto):
+        # the size of proto is: (B, way, z_dim)
+        batch_size = proto.size(0)
+        way = proto.size(1)
+        z_dim = proto.size(2)
+        assert batch_size == y_probability.size(0)
+        # y_probability is the probability distribution
+        # if the input is query data
+        # we can think the y_probability is the one-hot coding
+        # the size of y_probability is: (B, N, way)
+        num_query_or_unlabeled = y_probability.size(1)
+
+        # the size of proto is (B, 1, way, Z)
+        proto = proto.unsqueeze(1)
+        # expand the size of proto to (B, N, way, Z)
+        proto = proto.expand(batch_size, num_query_or_unlabeled, way, z_dim)
+        # in order to calculate simplifier
+        # resize the size of proto to (B*N, way, Z)
+        proto = proto.contiguous().view((-1, way, z_dim))
+
+        if self.continuous_type == 'add':
+            y_probability = y_probability.view(batch_size * num_query_or_unlabeled, 1, way)
+            # the size of crspd_protp is (B*N, 1, Z)
+            crspd_protp = torch.bmm(y_probability, proto)
+        else:
+            y_probability = y_probability.view(batch_size * num_query_or_unlabeled, way, 1)
+            # the size of crspd_protp is (B*N, way, Z)
+            crspd_protp = proto * y_probability
+        # the output size is (B*N, way*C, H, W) or (B, C, H, W)
+        return crspd_protp.view(crspd_protp.size(0), self.f_shape[0]*crspd_protp.size(1), *self.f_shape[1:])
+
+    # z_x is the output of the classifier's prototypical network
+    # y_p is the probability distribution
+    def get_g_input(self, z_x, y_p, proto):
+        # the size of z_x is (B, N, z_dim)
+        z_x = z_x.view(z_x.size(0)*z_x.size(1), *self.f_shape[:])
+        z_x_corresponding_proto = self.get_crspd_proto_based_label(y_p, proto)
+        assert z_x.size()[2:] == z_x_corresponding_proto.size()[2:]
+        # the size of g_input is: (B*N, 2*f_out_c, f_out_h, f_out_w)
+        return torch.cat([z_x, z_x_corresponding_proto], 1)
+
+    def forward_g(self, z_x, y_p, proto, input_type='query'):
+        if input_type == 'query':
+            y_p = Variable(y_p)
+        else:
+            pass
+        g_input = self.get_g_input(z_x, y_p, proto)
+        return self.g.forward(g_input)
+
+
+@register_discriminator('related_continuous_only_g_discriminator')
+def load_related_continuous_only_g_discriminator(**kwargs):
+    input_dim = kwargs['input_dim']        # default is [1, 28, 28]
+    out_dim_list = kwargs['out_dim_list']  # default is:[32, 64, 64, 64, 64, 64]
+    way = kwargs['way']
+    f_shape = (out_dim_list[3], input_dim[1] // 2 // 2 // 2 // 2, input_dim[2] // 2 // 2 // 2 // 2)
+    continuous_type = kwargs['continuous_type']
+
+    if continuous_type == 'add':
+        g_input_dim = 2*out_dim_list[3]
+    elif continuous_type == 'cat':
+        g_input_dim = (1+way)*out_dim_list[3]
+
+    # f = nn.Sequential(
+    #     conv_bn_relu_maxpool_block(input_dim[0], out_dim_list[0]),         # (32, 14, 14)
+    #     conv_bn_relu_maxpool_block(out_dim_list[0], out_dim_list[1]),      # (64, 7, 7)
+    #     conv_bn_relu_block(out_dim_list[1], out_dim_list[2]),              # (64, 7, 7)
+    #     conv_bn_relu_block(out_dim_list[2], out_dim_list[3]),              # (64, 7, 7)
+    #     Flatten()
+    # )
+
+    g = nn.Sequential(
+        conv_bn_relu_maxpool_block(g_input_dim, out_dim_list[4]),           # (128, 3, 3)
+        conv_bn_relu_maxpool_block(out_dim_list[4], out_dim_list[5]),       # (64, 1, 1)
+        conv_bn_relu_maxpool_block(out_dim_list[5], out_dim_list[5]),       # (64, 1, 1)
+        Flatten(),
+        linear_sigmoid(out_dim_list[5])
+    )
+    return Related_Network_Continuous_Only_G(g, f_shape, continuous_type=continuous_type)

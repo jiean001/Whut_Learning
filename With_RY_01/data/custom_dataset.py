@@ -9,14 +9,20 @@
 # data基本操作
 #########################################################
 try:
-    from .episode import  Episode
+    from ..data.episode import Episode
+    from ..utils.data_utils import default_img_loader
+    from ..utils.data_utils import get_one_img
 except:
-    from episode import Episode
+    from data.episode import Episode
+    from utils.data_utils import default_img_loader
+    from utils.data_utils import get_one_img
 import torch.utils.data as data
 import numpy as np
 import os
 import pickle as pkl
 import random
+import glob
+import torch
 
 
 class Custom_Dataset(data.Dataset):
@@ -165,3 +171,70 @@ class Custom_Dataset(data.Dataset):
 
     def __len__(self):
         return 1000000
+
+class NST_Dataset(data.Dataset):
+    def __init__(self, dataset_dir, dataset_name, dataset_type, is_rgb,
+                 style_character_num, one_style_choice_num,
+                 loader, transform, fineSize, is_cuda):
+        super(NST_Dataset, self).__init__()
+        standard_dir = os.path.join(dataset_dir, 'standard')
+        dataset_dir = os.path.join(dataset_dir, dataset_name, dataset_type)
+        self.data_lst = self.init_dataset(dataset_dir, standard_dir, style_character_num, one_style_choice_num)
+
+        self.is_rgb = is_rgb
+        self.loader = loader
+        if self.is_rgb:
+            self.open_type = 'RGB'
+        else:
+            self.open_type = 'L'
+        self.transform = transform
+        self.fineSize = fineSize
+        self.is_cuda = is_cuda
+        # test
+        self.__getitem__(0)
+
+    def init_dataset(self, dataset_dir, standard_dir, style_character_num, one_style_choice_num):
+        dir_lst = glob.glob('%s/*' %(dataset_dir))
+        data_lst = []
+        for style_dir in dir_lst:
+            imgs = glob.glob('%s/*.*' %(style_dir))
+            if len(imgs) < style_character_num+1:
+                continue
+            for i in range(one_style_choice_num):
+                random.shuffle(imgs)
+                one_group_data = imgs[:style_character_num+1]
+                one_group_data.append(one_group_data[-1])
+                standard_name = os.path.join(standard_dir, os.path.basename(one_group_data[-1]))
+                one_group_data[-2] = standard_name
+                data_lst.append(one_group_data)
+        return data_lst
+
+    def get_style_tensor(self, style_img_lst, loader=default_img_loader, open_type='L', transform=None, fineSize=64, is_cuda=False):
+        is_first = True
+        for img_path in style_img_lst:
+            img = get_one_img(img_path=img_path, loader=loader, open_type=open_type, transform=transform,
+                              fineSize=fineSize, is_cuda=is_cuda)
+            if is_first:
+                is_first = False
+                ims = img
+            else:
+                ims = torch.cat((ims, img), 0)
+        return ims
+
+    def __getitem__(self, index):
+        style_standard_gt = self.data_lst[index]
+        style_img_lst = style_standard_gt[:-2]
+        standard_img = style_standard_gt[-2]
+        gt_img = style_standard_gt[-1]
+
+        ts_style_img_lst = self.get_style_tensor(style_img_lst=style_img_lst, loader=self.loader,
+                                                 open_type=self.open_type,
+                                                 transform=self.transform, fineSize=self.fineSize, is_cuda=self.is_cuda)
+        ts_standard_img = get_one_img(img_path=standard_img, loader=self.loader, open_type=self.open_type,
+                                      transform=self.transform, fineSize=self.fineSize, is_cuda=self.is_cuda)
+        ts_gt_img = get_one_img(img_path=gt_img, loader=self.loader, open_type=self.open_type, transform=self.transform,
+                                fineSize=self.fineSize, is_cuda=self.is_cuda)
+        return ts_style_img_lst, ts_standard_img, ts_gt_img
+
+    def __len__(self):
+        return len(self.data_lst)

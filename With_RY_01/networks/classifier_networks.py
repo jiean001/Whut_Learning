@@ -125,7 +125,7 @@ class Prototypical_Net(nn.Module):
 
     def forward_test(self, sample, run_type=1):
         # todo add the eval
-        # self.encoder.eval()
+        self.encoder.eval()
         # xs: (B, way*shot, C, W, H)
         xs = Variable(sample['xs'])  # support labeled
 
@@ -141,6 +141,59 @@ class Prototypical_Net(nn.Module):
             return self.forward_base(xs, xq, yq, 'test')
         else:
             raise ValueError("Unknown type {:s}".format(type))
+
+    def forward_classifier(self, xs, xu):
+        way = self.way
+        xs = Variable(xs).float()
+        xu = Variable(xu).float()
+
+        batch_size = xs.size(0)
+        assert xu.size(0) == batch_size
+
+        if self.is_cuda:
+            xs = xs.cuda()
+            xu = xu.cuda()
+
+        n_xu = xu.size(1)
+
+        xs = xs.view(batch_size * way * self.shot, *xs.size()[2:])
+        xu = xu.view(batch_size * n_xu, *xu.size()[2:])
+        input_batch = torch.cat([xs, xu], 0)
+
+        # the size of z is:[batch*way*shot, z_dim]
+        z = self.encoder.forward(input_batch)
+        z_dim = z.size(-1)
+
+        z_proto, z_xu = self.cal_proto_and_zu(z, batch_size, z_dim, n_xu, way)
+        # the shape of dists is:    [Batch, Way*Query, Way(Distance)]
+        # the shape of z_u is: [Batch, Way*Query, Z_DIM]
+        # the shape of z_proto is:  [Batch, Way, Z_DIM]
+        dists = batch_euclidean_dist(z_xu, z_proto)
+
+        # the shape of dists is:    [Batch, Way*Query, Way(probability)]
+        p_dists = F.softmax(-dists, dim=2)
+        return z_proto, z_xu.view(batch_size, n_xu, z_dim), p_dists
+
+    def forward_encoder(self, x, input_type='xs'):
+        # the size of x is (B, N, c, h, w)
+        x = Variable(x).float()
+        batch_size = x.size(0)
+        num = x.size(1)
+        x = x.view(x.size(0)*x.size(1), *x.size()[2:])
+
+        # the size of z is (batch*way*shot, z_dim)
+        z = self.encoder.forward(x)
+        z_dim = z.size(-1)
+
+        if input_type == 'xs':
+            # the size of proto is: (B, way, z_dim)
+            proto = z.view(batch_size, self.way, self.shot, z_dim).mean(2)
+            return proto
+        elif input_type == 'xu' or input_type == 'xq':
+            # the size of proto is: (B, num, z_dim)
+            return z.view(batch_size, num, z_dim)
+        else:
+            assert 1 == 2
 
     def get_graph(self):
         return self.encoder

@@ -24,4 +24,4 @@ def get_dataloader(data_opt):
     if data_opt['dataloader_name'] in DATALOADER_REGISTRY:
         return DATALOADER_REGISTRY[data_opt['dataloader_name']](**data_opt)
     else:
-        raise ValueError("Unknown classifier {:s}".format(data_opt['dataloader_name']))
+        raise ValueError("Unknown dataloader {:s}".format(data_opt['dataloader_name']))

@@ -67,7 +67,8 @@ def register_generator(generator_name):
     return decorator
 
 
-def get_generator(generator_name, generator_opt):
+def get_generator(generator_opt):
+    generator_name = generator_opt['model_name']
     if generator_name in GENERATOR_REGISTRY:
         return GENERATOR_REGISTRY[generator_name](**generator_opt)
     else:
